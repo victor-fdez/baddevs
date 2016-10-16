@@ -66,11 +66,44 @@ Install the compile daemon so that whenever you make a change to the go programs
 ```bash
 #Install CompileDaemon locally
 go get github.com/githubnemo/CompileDaemon
-
 ```
 
-#### Run in Development Mode
+
+## Run in Development
+
+### Run in Development Mode
+
+#### Run the Server
 
 ```bash
- CompileDaemon -color -command='./baddevs --port 8081 --host 0.0.0.0'
+CompileDaemon -color -command='./baddevs --port 8081 --host 0.0.0.0'
+```
+
+#### Run Client Generator using Web Pack
+
+```bash
+# Move to client/ folder
+cd client/
+# Run npm generator that regenerates based on changes
+npm run watch:dev
+```
+
+### Run in Production Mode
+
+#### Run the Server
+
+```bash
+# Build
+go build
+# Run
+./baddevs --port 80 --host 0.0.0.0
+```
+
+#### Run Client Generator using Web Pack
+
+```bash
+# Move to client/ folder
+cd client/
+# Run npm generator that regenerates based on changes
+npm run build:prod 
 ```
