@@ -51,10 +51,12 @@ func init() {
 
 func badDevsIndex(w http.ResponseWriter, req *http.Request) {
 	//fmt.Printf("%+v\n", req)
-	http.ServeFile(w, req, "client/index.html")
+	http.ServeFile(w, req, "client/dist/index.html")
 }
 
 func badDevsAPI(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	http.ServeFile(w, req, "index.html")
 }
 

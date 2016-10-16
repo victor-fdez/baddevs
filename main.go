@@ -25,9 +25,6 @@ func main() {
 
 	r := mux.NewRouter()
 
-	// This will serve files under http://<host>:<port>/static/<filename>
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("./static/"))))
-
 	// Setup logs
 	loggedRouter := handlers.LoggingHandler(os.Stdout, r)
 
@@ -42,6 +39,11 @@ func main() {
 	// Setup handler
 	badDevsHandler(r, badDevsHost)
 	badHandler(r)
+
+	// This will serve files under http://<host>:<port>/static/<filename>
+	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", http.FileServer(http.Dir("./client/dist/assets/"))))
+	r.PathPrefix("/{filename}.js").Handler(http.FileServer(http.Dir("./client/dist/")))
+	r.PathPrefix("/{filename}.map").Handler(http.FileServer(http.Dir("./client/dist/")))
 
 	badDevsInfo("BADdevs starting @ %v:%v\n", host, port)
 
