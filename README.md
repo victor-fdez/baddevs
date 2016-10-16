@@ -45,5 +45,32 @@ echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo s
 
 #### GOlang
 
+```bash
+# Install the GOLang binaries
+VERSION=1.7.1
+OS=linux
+ARCH=amd64
+tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
+#Install GO
+#Setup some ENV variables for compiling GO programs
+export GOROOT=$HOME/go
+export GOBIN=$GOROOT/bin
+export GOPATH=$GOROOT
+export PATH=$PATH:/usr/local/go/bin:$GOROOT/bin
 ```
+
+##### CompileDaemon
+
+Install the compile daemon so that whenever you make a change to the go programs, it will automatically detect the change and compile the GO programs.
+
+```bash
+#Install CompileDaemon locally
+go get github.com/githubnemo/CompileDaemon
+
+```
+
+#### Run in Development Mode
+
+```bash
+ CompileDaemon -color -command='./baddevs --port 8081 --host 0.0.0.0'
 ```
