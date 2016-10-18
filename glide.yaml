@@ -6,3 +6,6 @@ import:
   version: v1.1
 - package: github.com/gorilla/mux
   version: v1.1
+- package: gopkg.in/redis.v5
+  version: v5.0.0
+- package: gopkg.in/bsm/ratelimit.v1

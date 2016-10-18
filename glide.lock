@@ -1,5 +1,5 @@
-hash: 69a1b047fd74353108bbbc6efe43e8faaabd06d568857d81f02955906def0ffe
-updated: 2016-10-18T18:08:33.626550794Z
+hash: e437b194a963a8015b0278f3ad23c9f7677a9bb2b18635f908e0d869d06a36ec
+updated: 2016-10-18T18:34:25.290913015Z
 imports:
 - name: github.com/fatih/color
   version: dea9d3a26a087187530244679c1cfb3a42937794
@@ -17,4 +17,14 @@ imports:
   version: 002cbb5f952456d0c50e0d2aff17ea5eca716979
   subpackages:
   - unix
+- name: gopkg.in/bsm/ratelimit.v1
+  version: db14e161995a5177acef654cb0dd785e8ee8bc22
+- name: gopkg.in/redis.v5
+  version: 6f8957c5b7dece15d1ea5f592ec88f46ee2deffa
+  subpackages:
+  - internal
+  - internal/consistenthash
+  - internal/hashtag
+  - internal/pool
+  - internal/proto
 testImports: []

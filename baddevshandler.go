@@ -2,8 +2,16 @@ package main
 
 import (
 	"github.com/gorilla/mux"
+	"gopkg.in/redis.v5"
 	"net/http"
 )
+
+//BADDevs config
+type BADDevsConfig struct {
+	redisHost   string
+	redisPort   string
+	badDevsHost string
+}
 
 //API related types
 type APIFunc func(w http.ResponseWriter, r *http.Request)
@@ -17,6 +25,7 @@ type APIEndPoint struct {
 
 var apiCalls []APIEndPoint
 var apiMap map[string]http.HandlerFunc
+var client redis.Client
 
 //Domain related types
 type Domain struct {
