@@ -1,0 +1,8 @@
+package: .
+import:
+- package: github.com/fatih/color
+  version: v1.1.0
+- package: github.com/gorilla/handlers
+  version: v1.1
+- package: github.com/gorilla/mux
+  version: v1.1

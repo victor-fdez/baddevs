@@ -1,3 +1,4 @@
 static/
+vendor/
 *.swp
 baddevs
