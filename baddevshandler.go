@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
 	"gopkg.in/redis.v5"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path"
 	"regexp"
 )
 
@@ -16,6 +20,17 @@ type BADDevsConfig struct {
 	redisPort     string
 	blackListDir  string
 	badDevsDomain string
+}
+
+type BADDevsCategory struct {
+	Name       string `json:"name"`
+	Set        uint   `json:"set"`
+	NumDomains int    `json:"num_domains"`
+}
+
+type APIError struct {
+	ErrorMsg    string `json:"error"`
+	Description string `json:"description"`
 }
 
 type APIEndPoint struct {
@@ -29,6 +44,8 @@ var apiCalls []APIEndPoint
 var apiMap map[string]http.HandlerFunc
 var client *redis.Client
 var badDevsConfig BADDevsConfig
+var badDevsCategoriesMap map[string]*BADDevsCategory
+var badDevsCategories []BADDevsCategory
 
 //Domain related types
 type Domain struct {
@@ -40,30 +57,6 @@ func init() {
 	//intialize api calls, add your api calls here
 	apiCalls = []APIEndPoint{
 		APIEndPoint{
-			path:    "/domains",
-			method:  "GET",
-			name:    "Domains",
-			handler: badDevsDomains,
-		},
-		APIEndPoint{
-			path:    "/domains/{id}",
-			method:  "GET",
-			name:    "Domain",
-			handler: badDevsDomain,
-		},
-		APIEndPoint{
-			path:    "/domains/{id}",
-			method:  "DELETE",
-			name:    "DomainDelete",
-			handler: badDevsDomainDelete,
-		},
-		APIEndPoint{
-			path:    "/domains/add",
-			method:  "PUT",
-			name:    "DomainAdd",
-			handler: badDevsAddDomain,
-		},
-		APIEndPoint{
 			path:    "/domain-categories/",
 			method:  "GET",
 			name:    "DomainCategories",
@@ -72,8 +65,20 @@ func init() {
 		APIEndPoint{
 			path:    "/domain-categories/{name:[a-z_-]+}",
 			method:  "GET",
-			name:    "DomainCategories",
+			name:    "DomainCategory",
 			handler: badDevsDomainCategory,
+		},
+		APIEndPoint{
+			path:    "/domain-categories/{name:[a-z_-]+}/set",
+			method:  "PUT",
+			name:    "DomainCategorySet",
+			handler: badDevsDomainCategorySet,
+		},
+		APIEndPoint{
+			path:    "/domain-categories/{name:[a-z_-]+}/unset",
+			method:  "PUT",
+			name:    "DomainCategoryUnset",
+			handler: badDevsDomainCategoryUnset,
 		},
 	}
 	//setup api calls map for fast lookup
@@ -83,62 +88,23 @@ func init() {
 	}
 }
 
-type APIError struct {
-	ErrorMsg    string `json:"error"`
-	Description string `json:"description"`
-}
-
 func badDevsJsonError(w http.ResponseWriter, e string, format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	jsError := &APIError{
+	/*jsError := &APIError{
 		ErrorMsg:    e,
 		Description: s,
 	}
-	js, _ := json.Marshal(jsError)
+	js, _ := json.Marshal(jsError)*/
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	http.Error(w, s, http.StatusBadRequest)
 }
 
 func badDevsIndex(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, "client/dist/index.html")
 }
 
-func badDevsDomain(w http.ResponseWriter, req *http.Request) {
-	http.ServeFile(w, req, "client/dist/index.html")
-}
-
-func badDevsDomains(w http.ResponseWriter, req *http.Request) {
-	http.ServeFile(w, req, "client/dist/index.html")
-}
-
-func badDevsDomainDelete(w http.ResponseWriter, req *http.Request) {
-	http.ServeFile(w, req, "client/dist/index.html")
-}
-
-func badDevsAddDomain(w http.ResponseWriter, req *http.Request) {
-	http.ServeFile(w, req, "client/dist/index.html")
-}
-
-func badDevsDomainCategory(w http.ResponseWriter, req *http.Request) {
-
-}
-
 func badDevsDomainCategories(w http.ResponseWriter, req *http.Request) {
-	categoryDirs, err := ioutil.ReadDir(badDevsConfig.blackListDir)
-	if err != nil {
-		badDevsError("API /categories/ could not read black list directory @ %v\n",
-			badDevsConfig.blackListDir)
-		badDevsJsonError(w, "no-categories", "Could not get categories from server")
-		return
-	}
-	categories := make([]string, 0, len(categoryDirs))
-	for _, categoryDir := range categoryDirs {
-		name := categoryDir.Name()
-		if matched, _ := regexp.MatchString("^CATEGORIES", name); !matched {
-			categories = append(categories, categoryDir.Name())
-		}
-	}
-	js, err := json.Marshal(categories)
+	js, err := json.Marshal(badDevsCategories)
 	if err != nil {
 		badDevsError("API /categories/ could not generate json\n")
 		badDevsJsonError(w, "no-categories", "Could not get categories from server")
@@ -146,6 +112,122 @@ func badDevsDomainCategories(w http.ResponseWriter, req *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
+}
+
+func badDevsDomainCategory(w http.ResponseWriter, req *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	vars := mux.Vars(req)
+	name := vars["name"]
+	category, ok := badDevsCategoriesMap[name]
+	if !ok {
+		badDevsError("API GET /domain-categories/{name} could not find that category name\n")
+		badDevsJsonError(w, "no-categories", "Could not find that Category")
+		return
+	}
+	js, err := json.Marshal(category)
+	if err != nil {
+		badDevsJsonError(w, "server-error", "Internal server error")
+		return
+	}
+	w.Write(js)
+}
+
+func badDevsDomainCategorySet(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	name := vars["name"]
+	category, ok := badDevsCategoriesMap[name]
+	if !ok {
+		badDevsError("API GET /domain-categories/{name} could not find that category name\n")
+		badDevsJsonError(w, "no-categories", "Could not find that Category")
+		return
+	}
+	category.Set = 1
+	js, err := json.Marshal(category)
+	if err != nil {
+		badDevsJsonError(w, "server-error", "Internal server error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+func badDevsDomainCategoryUnset(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	name := vars["name"]
+	category, ok := badDevsCategoriesMap[name]
+	if !ok {
+		badDevsError("API GET /domain-categories/{name} could not find that category name\n")
+		badDevsJsonError(w, "no-categories", "Could not find that Category")
+		return
+	}
+	category.Set = 0
+	js, err := json.Marshal(category)
+	if err != nil {
+		badDevsJsonError(w, "server-error", "Internal server error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+func badDevsInitCategories() bool {
+	// read list of directories in black list dir, each
+	// corresponds to a category of urls
+	categoryDirs, err := ioutil.ReadDir(badDevsConfig.blackListDir)
+	if err != nil {
+		badDevsError("Unable to open %v", badDevsConfig.blackListDir)
+		return false
+	}
+	// create category map
+	badDevsCategories = make([]BADDevsCategory, 0, len(categoryDirs))
+	badDevsCategoriesMap = make(map[string]*BADDevsCategory)
+	for _, categoryDir := range categoryDirs {
+		name := categoryDir.Name()
+		if matched, _ := regexp.MatchString("^CATEGORIES|jstor", name); !matched {
+			// open files
+			filePath := path.Join(badDevsConfig.blackListDir, name, "domains")
+			file, err := os.Open(filePath)
+			if err != nil {
+				badDevsError(" %v unable to read domain file\n", name)
+				continue
+			}
+			// get num domains
+			numDomains, err := lineCounter(file)
+			if err != nil {
+				numDomains = 0
+			}
+			// init category
+			category := BADDevsCategory{
+				Name:       name,
+				Set:        0,
+				NumDomains: numDomains,
+			}
+			// store the category
+			badDevsCategories = append(badDevsCategories, category)
+			badDevsCategoriesMap[name] = &category
+			badDevsInfo("\t%v has %v domains\n", name, numDomains)
+		}
+	}
+	return true
+}
+
+func lineCounter(r io.Reader) (int, error) {
+	count := 0
+	buf := make([]byte, 32*1024)
+	lineSep := []byte{'\n'}
+
+	for {
+		c, err := r.Read(buf)
+		count += bytes.Count(buf[:c], lineSep)
+
+		switch {
+		case err == io.EOF:
+			return count, nil
+
+		case err != nil:
+			return count, err
+		}
+	}
 }
 
 func badDevsAPI(w http.ResponseWriter, req *http.Request) {
@@ -181,4 +263,9 @@ func badDevsHandler(r *mux.Router, config BADDevsConfig) {
 	badDevsInfo("Redis connected %v:%v\n", config.redisHost, config.redisPort)
 	//store config for later
 	badDevsConfig = config
+	// initialize categories
+	if !badDevsInitCategories() {
+		badDevsError("Unable to initialize Categories")
+		panic(nil)
+	}
 }
