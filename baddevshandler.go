@@ -8,9 +8,9 @@ import (
 
 //BADDevs config
 type BADDevsConfig struct {
-	redisHost   string
-	redisPort   string
-	badDevsHost string
+	redisHost     string
+	redisPort     string
+	badDevsDomain string
 }
 
 //API related types
@@ -25,7 +25,7 @@ type APIEndPoint struct {
 
 var apiCalls []APIEndPoint
 var apiMap map[string]http.HandlerFunc
-var client redis.Client
+var client *redis.Client
 
 //Domain related types
 type Domain struct {
@@ -98,10 +98,10 @@ func badDevsAPI(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, "index.html")
 }
 
-func badDevsHandler(r *mux.Router, s string) {
+func badDevsHandler(r *mux.Router, config BADDevsConfig) {
 	//setup reachable urls
-	badDevsInfo("Setting up routes for %v\n", s)
-	r = r.Host("baddevs.io").Subrouter()
+	badDevsInfo("Setting up routes for %v\n", config.badDevsDomain)
+	r = r.Host(config.badDevsDomain).Subrouter()
 	r.HandleFunc("/", badDevsIndex)
 	//setup api functions
 	for _, call := range apiCalls {
@@ -111,4 +111,17 @@ func badDevsHandler(r *mux.Router, s string) {
 			Name(call.name).
 			Handler(call.handler)
 	}
+	//setup Redis client
+	client = redis.NewClient(&redis.Options{
+		Addr:     config.redisHost + ":" + config.redisPort,
+		Password: "",
+		DB:       0,
+	})
+	//ping Redis
+	_, err := client.Ping().Result()
+	if err != nil {
+		badDevsError("Redis did not respond to ping", config.badDevsDomain)
+		panic(err)
+	}
+	badDevsInfo("Redis connected %v:%v\n", config.redisHost, config.redisPort)
 }

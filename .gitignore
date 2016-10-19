@@ -1,4 +1,5 @@
 static/
 vendor/
+blacklists/
 *.swp
 baddevs
