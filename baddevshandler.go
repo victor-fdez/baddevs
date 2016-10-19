@@ -69,6 +69,12 @@ func init() {
 			name:    "DomainCategories",
 			handler: badDevsDomainCategories,
 		},
+		APIEndPoint{
+			path:    "/domain-categories/{name:[a-z_-]+}",
+			method:  "GET",
+			name:    "DomainCategories",
+			handler: badDevsDomainCategory,
+		},
 	}
 	//setup api calls map for fast lookup
 	apiMap = make(map[string]http.HandlerFunc)
@@ -111,6 +117,10 @@ func badDevsDomainDelete(w http.ResponseWriter, req *http.Request) {
 
 func badDevsAddDomain(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, "client/dist/index.html")
+}
+
+func badDevsDomainCategory(w http.ResponseWriter, req *http.Request) {
+
 }
 
 func badDevsDomainCategories(w http.ResponseWriter, req *http.Request) {

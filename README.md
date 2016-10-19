@@ -24,15 +24,11 @@ sudo apt-get install -y build-essential
 
 ##### Extra tools for Webpack and Typescript
 
-The following global tools to be able to generate the client project. If you would like to get more information about the project please visit it's [page](https://github.com/AngularClass/angular2-webpack-starter/tree/material2)
+The following commands will install all the required packages and tools for the project. If you would like to get more information about the project please visit it's [page](https://github.com/AngularClass/angular2-webpack-starter/tree/material2)
 
 ```bash
-npm install --global webpack
-npm install --global webpack-dev-server
-npm install --global karma-cli
-npm install --global protractor
-npm install --global typescript
-npm install --global rimraf 
+npm install --save
+export PATH=./node_modules/.bin/:$PATH
 ```
 
 ##### Extra Linux Configs
@@ -58,6 +54,13 @@ export GOBIN=$GOROOT/bin
 export GOPATH=$GOROOT
 export PATH=$PATH:/usr/local/go/bin:$GOROOT/bin
 ```
+##### Glide
+
+Glide is required in order to install the correct dependencies for this go project. This [website](https://github.com/Masterminds/glide) contains all of it's information.
+
+```bash
+curl https://glide.sh/get | sh
+```
 
 ##### CompileDaemon
 
@@ -76,6 +79,8 @@ go get github.com/githubnemo/CompileDaemon
 #### Run the Server
 
 ```bash
+# get dependencies
+glide install
 CompileDaemon -color -command='./baddevs --port 8081 --host 0.0.0.0'
 ```
 
@@ -94,9 +99,12 @@ npm run watch:dev
 
 ```bash
 # Build
+glide install
 go build
 # Run
 ./baddevs --port 80 --host 0.0.0.0
+# Helps
+./baddevs
 ```
 
 #### Run Client Generator using Web Pack
