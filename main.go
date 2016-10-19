@@ -22,8 +22,9 @@ func main() {
 	flag.StringVar(&port, "port", "8000", "the port to bind to.")
 	flag.StringVar(&host, "host", "0.0.0.0", "the ip address to bind to.")
 	flag.StringVar(&config.badDevsDomain, "baddevs-domain", "baddevs.io", "the domain used by server to control dns.")
-	flag.StringVar(&config.redisHost, "redis-host", "0.0.0.0", "the ip address to bind to. Defaults to 0.0.0.0")
-	flag.StringVar(&config.redisPort, "redis-port", "6379", "the domain used by server to control dns.")
+	flag.StringVar(&config.redisHost, "redis-host", "0.0.0.0", "the ip of the Redis server.")
+	flag.StringVar(&config.redisPort, "redis-port", "6379", "the port of the Redis server.")
+	flag.StringVar(&config.blackListDir, "black-list-dir", "blacklists/", "The directory containing the black list category folders.")
 	flag.Parse()
 
 	r := mux.NewRouter()

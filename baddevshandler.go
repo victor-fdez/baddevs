@@ -1,20 +1,22 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
 	"gopkg.in/redis.v5"
+	"io/ioutil"
 	"net/http"
+	"regexp"
 )
 
 //BADDevs config
 type BADDevsConfig struct {
 	redisHost     string
 	redisPort     string
+	blackListDir  string
 	badDevsDomain string
 }
-
-//API related types
-type APIFunc func(w http.ResponseWriter, r *http.Request)
 
 type APIEndPoint struct {
 	path    string
@@ -26,6 +28,7 @@ type APIEndPoint struct {
 var apiCalls []APIEndPoint
 var apiMap map[string]http.HandlerFunc
 var client *redis.Client
+var badDevsConfig BADDevsConfig
 
 //Domain related types
 type Domain struct {
@@ -58,6 +61,12 @@ func init() {
 			path:    "/domains/add",
 			method:  "PUT",
 			name:    "DomainAdd",
+			handler: badDevsAddDomain,
+		},
+		APIEndPoint{
+			path:    "/domain-categories/",
+			method:  "GET",
+			name:    "DomainCategories",
 			handler: badDevsDomainCategories,
 		},
 	}
@@ -66,6 +75,22 @@ func init() {
 	for _, call := range apiCalls {
 		apiMap[call.path] = call.handler
 	}
+}
+
+type APIError struct {
+	ErrorMsg    string `json:"error"`
+	Description string `json:"description"`
+}
+
+func badDevsJsonError(w http.ResponseWriter, e string, format string, a ...interface{}) {
+	s := fmt.Sprintf(format, a...)
+	jsError := &APIError{
+		ErrorMsg:    e,
+		Description: s,
+	}
+	js, _ := json.Marshal(jsError)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
 }
 
 func badDevsIndex(w http.ResponseWriter, req *http.Request) {
@@ -84,17 +109,37 @@ func badDevsDomainDelete(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, "client/dist/index.html")
 }
 
-func badDevsDomainAdd(w http.ResponseWriter, req *http.Request) {
+func badDevsAddDomain(w http.ResponseWriter, req *http.Request) {
 	http.ServeFile(w, req, "client/dist/index.html")
 }
 
 func badDevsDomainCategories(w http.ResponseWriter, req *http.Request) {
-	http.ServeFile(w, req, "client/dist/index.html")
+	categoryDirs, err := ioutil.ReadDir(badDevsConfig.blackListDir)
+	if err != nil {
+		badDevsError("API /categories/ could not read black list directory @ %v\n",
+			badDevsConfig.blackListDir)
+		badDevsJsonError(w, "no-categories", "Could not get categories from server")
+		return
+	}
+	categories := make([]string, 0, len(categoryDirs))
+	for _, categoryDir := range categoryDirs {
+		name := categoryDir.Name()
+		if matched, _ := regexp.MatchString("^CATEGORIES", name); !matched {
+			categories = append(categories, categoryDir.Name())
+		}
+	}
+	js, err := json.Marshal(categories)
+	if err != nil {
+		badDevsError("API /categories/ could not generate json\n")
+		badDevsJsonError(w, "no-categories", "Could not get categories from server")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
 }
 
 func badDevsAPI(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
 	http.ServeFile(w, req, "index.html")
 }
 
@@ -124,4 +169,6 @@ func badDevsHandler(r *mux.Router, config BADDevsConfig) {
 		panic(err)
 	}
 	badDevsInfo("Redis connected %v:%v\n", config.redisHost, config.redisPort)
+	//store config for later
+	badDevsConfig = config
 }
