@@ -88,15 +88,16 @@ func init() {
 	}
 }
 
-func badDevsJsonError(w http.ResponseWriter, e string, format string, a ...interface{}) {
+func badDevsJsonError(w http.ResponseWriter, status int, e string, format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	/*jsError := &APIError{
+	jsError := &APIError{
 		ErrorMsg:    e,
 		Description: s,
 	}
-	js, _ := json.Marshal(jsError)*/
+	js, _ := json.Marshal(jsError)
 	w.Header().Set("Content-Type", "application/json")
-	http.Error(w, s, http.StatusBadRequest)
+	w.WriteHeader(status)
+	w.Write(js)
 }
 
 func badDevsIndex(w http.ResponseWriter, req *http.Request) {
@@ -107,7 +108,7 @@ func badDevsDomainCategories(w http.ResponseWriter, req *http.Request) {
 	js, err := json.Marshal(badDevsCategories)
 	if err != nil {
 		badDevsError("API /categories/ could not generate json\n")
-		badDevsJsonError(w, "no-categories", "Could not get categories from server")
+		badDevsJsonError(w, http.StatusBadRequest, "no-categories", "Could not get categories from server")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -115,55 +116,48 @@ func badDevsDomainCategories(w http.ResponseWriter, req *http.Request) {
 }
 
 func badDevsDomainCategory(w http.ResponseWriter, req *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	vars := mux.Vars(req)
-	name := vars["name"]
-	category, ok := badDevsCategoriesMap[name]
+	category, ok := badDevsUtilGetCategory(w, req)
 	if !ok {
-		badDevsError("API GET /domain-categories/{name} could not find that category name\n")
-		badDevsJsonError(w, "no-categories", "Could not find that Category")
 		return
 	}
-	js, err := json.Marshal(category)
-	if err != nil {
-		badDevsJsonError(w, "server-error", "Internal server error")
-		return
-	}
-	w.Write(js)
+	badDevsUtilReturnCategory(category, w, req)
 }
 
 func badDevsDomainCategorySet(w http.ResponseWriter, req *http.Request) {
-	vars := mux.Vars(req)
-	name := vars["name"]
-	category, ok := badDevsCategoriesMap[name]
+	category, ok := badDevsUtilGetCategory(w, req)
 	if !ok {
-		badDevsError("API GET /domain-categories/{name} could not find that category name\n")
-		badDevsJsonError(w, "no-categories", "Could not find that Category")
 		return
 	}
 	category.Set = 1
-	js, err := json.Marshal(category)
-	if err != nil {
-		badDevsJsonError(w, "server-error", "Internal server error")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	badDevsUtilReturnCategory(category, w, req)
 }
 
 func badDevsDomainCategoryUnset(w http.ResponseWriter, req *http.Request) {
+	category, ok := badDevsUtilGetCategory(w, req)
+	if !ok {
+		return
+	}
+	category.Set = 0
+	badDevsUtilReturnCategory(category, w, req)
+}
+
+func badDevsUtilGetCategory(w http.ResponseWriter, req *http.Request) (*BADDevsCategory, bool) {
 	vars := mux.Vars(req)
 	name := vars["name"]
 	category, ok := badDevsCategoriesMap[name]
 	if !ok {
+		w.Header().Set("Content-Type", "application/json")
 		badDevsError("API GET /domain-categories/{name} could not find that category name\n")
-		badDevsJsonError(w, "no-categories", "Could not find that Category")
-		return
+		badDevsJsonError(w, http.StatusBadRequest, "no-categories", "Could not find that Category")
+		return nil, false
 	}
-	category.Set = 0
-	js, err := json.Marshal(category)
+	return category, true
+}
+
+func badDevsUtilReturnCategory(c *BADDevsCategory, w http.ResponseWriter, req *http.Request) {
+	js, err := json.Marshal(c)
 	if err != nil {
-		badDevsJsonError(w, "server-error", "Internal server error")
+		badDevsJsonError(w, http.StatusExpectationFailed, "server-error", "Internal server error")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
