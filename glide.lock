@@ -1,0 +1,30 @@
+hash: e437b194a963a8015b0278f3ad23c9f7677a9bb2b18635f908e0d869d06a36ec
+updated: 2016-10-18T18:34:25.290913015Z
+imports:
+- name: github.com/fatih/color
+  version: dea9d3a26a087187530244679c1cfb3a42937794
+- name: github.com/gorilla/context
+  version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
+- name: github.com/gorilla/handlers
+  version: ee54c7b44cab12289237fb8631314790076e728b
+- name: github.com/gorilla/mux
+  version: 0eeaf8392f5b04950925b8a69fe70f110fa7cbfc
+- name: github.com/mattn/go-colorable
+  version: 6c903ff4aa50920ca86087a280590b36b3152b9c
+- name: github.com/mattn/go-isatty
+  version: 66b8e73f3f5cda9f96b69efd03dd3d7fc4a5cdb8
+- name: golang.org/x/sys
+  version: 002cbb5f952456d0c50e0d2aff17ea5eca716979
+  subpackages:
+  - unix
+- name: gopkg.in/bsm/ratelimit.v1
+  version: db14e161995a5177acef654cb0dd785e8ee8bc22
+- name: gopkg.in/redis.v5
+  version: 6f8957c5b7dece15d1ea5f592ec88f46ee2deffa
+  subpackages:
+  - internal
+  - internal/consistenthash
+  - internal/hashtag
+  - internal/pool
+  - internal/proto
+testImports: []
