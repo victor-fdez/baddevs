@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 )
 
 //BADDevs config
@@ -20,6 +22,9 @@ type BADDevsConfig struct {
 	redisPort     string
 	blackListDir  string
 	badDevsDomain string
+	badDevsIP     string
+	goDnsHash     string
+	verbose       bool
 }
 
 type BADDevsCategory struct {
@@ -45,7 +50,7 @@ var apiMap map[string]http.HandlerFunc
 var client *redis.Client
 var badDevsConfig BADDevsConfig
 var badDevsCategoriesMap map[string]*BADDevsCategory
-var badDevsCategories []BADDevsCategory
+var badDevsCategories []*BADDevsCategory
 
 //Domain related types
 type Domain struct {
@@ -128,6 +133,10 @@ func badDevsDomainCategorySet(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
+	ok = badDevsRedisAddDomains(category, w, req)
+	if !ok {
+		return
+	}
 	category.Set = 1
 	badDevsUtilReturnCategory(category, w, req)
 }
@@ -137,8 +146,82 @@ func badDevsDomainCategoryUnset(w http.ResponseWriter, req *http.Request) {
 	if !ok {
 		return
 	}
+	ok = badDevsRedisRemoveDomains(category, w, req)
+	if !ok {
+		return
+	}
 	category.Set = 0
 	badDevsUtilReturnCategory(category, w, req)
+}
+
+func badDevsRedisAddDomains(c *BADDevsCategory, w http.ResponseWriter, req *http.Request) bool {
+	domains, ok := badDevsGetDomains(c, w, req)
+	if !ok {
+		return false
+	}
+	_, err := client.HMSet(badDevsConfig.goDnsHash, *domains).Result()
+	if err != nil {
+		badDevsError("Redis: Failed to HMSet map\n%v\nmap with %v keys", err, len(*domains))
+		//for key, value := range *domains {
+		//fmt.Printf("%v -> %v", key, value)
+		//}
+		badDevsJsonError(w, http.StatusExpectationFailed, "server-error", "Couldn't set/unset the given category")
+		return false
+	}
+	return true
+}
+
+func badDevsRedisRemoveDomains(c *BADDevsCategory, w http.ResponseWriter, req *http.Request) bool {
+	domainsM, ok := badDevsGetDomains(c, w, req)
+	if !ok {
+		return false
+	}
+	domains := make([]string, 0, len(*domainsM))
+	for k := range *domainsM {
+		domains = append(domains, k)
+	}
+	_, err := client.HDel(badDevsConfig.goDnsHash, domains...).Result()
+	if err != nil {
+		badDevsError("Redis: Failed to HDel map\n")
+		badDevsJsonError(w, http.StatusExpectationFailed, "server-error", "Couldn't set/unset the given category")
+		return false
+	}
+	return true
+}
+
+func badDevsGetDomains(c *BADDevsCategory, w http.ResponseWriter, req *http.Request) (*map[string]string, bool) {
+	filePath := path.Join(badDevsConfig.blackListDir, c.Name, "domains")
+	file, err := os.Open(filePath)
+	if err != nil {
+		badDevsError(" %v unable to read domain file\n", filePath)
+		badDevsJsonError(w, http.StatusExpectationFailed, "server-error", "Couldn't set/unset the given category")
+		return nil, false
+	}
+	domains := make(map[string]string, c.NumDomains)
+	//loop thru each domain in the file, checking and adding it to the map
+	domainRegExp := regexp.MustCompile(`^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][a-zA-Z0-9-_]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,6}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$`)
+	reader := bufio.NewReader(file)
+	line, prefix, err := reader.ReadLine()
+	for line != nil && !prefix && err == nil {
+		trimmedLine := strings.TrimSpace(string(line))
+		//fmt.Printf(trimmedLine)
+		if domainRegExp.MatchString(trimmedLine) {
+			domains[trimmedLine] = badDevsConfig.badDevsIP
+		} else {
+			badDevsError("Domain name is incorrectly formatted %v\n", trimmedLine)
+		}
+		line, prefix, err = reader.ReadLine()
+	}
+	if prefix {
+		if prefix {
+			badDevsError("Line read is to long!\n")
+		} else {
+			badDevsError("%v\n", err)
+		}
+		badDevsJsonError(w, http.StatusExpectationFailed, "server-error", "Couldn't set/unset the given category")
+		return nil, false
+	}
+	return &domains, true
 }
 
 func badDevsUtilGetCategory(w http.ResponseWriter, req *http.Request) (*BADDevsCategory, bool) {
@@ -173,7 +256,7 @@ func badDevsInitCategories() bool {
 		return false
 	}
 	// create category map
-	badDevsCategories = make([]BADDevsCategory, 0, len(categoryDirs))
+	badDevsCategories = make([]*BADDevsCategory, 0, len(categoryDirs))
 	badDevsCategoriesMap = make(map[string]*BADDevsCategory)
 	for _, categoryDir := range categoryDirs {
 		name := categoryDir.Name()
@@ -191,15 +274,15 @@ func badDevsInitCategories() bool {
 				numDomains = 0
 			}
 			// init category
-			category := BADDevsCategory{
+			category := &BADDevsCategory{
 				Name:       name,
 				Set:        0,
 				NumDomains: numDomains,
 			}
 			// store the category
 			badDevsCategories = append(badDevsCategories, category)
-			badDevsCategoriesMap[name] = &category
-			badDevsInfo("\t%v has %v domains\n", name, numDomains)
+			badDevsCategoriesMap[name] = category
+			badDevsDebug("\t%v has %v domains\n", name, numDomains)
 		}
 	}
 	return true
@@ -255,8 +338,6 @@ func badDevsHandler(r *mux.Router, config BADDevsConfig) {
 		panic(err)
 	}
 	badDevsInfo("Redis connected %v:%v\n", config.redisHost, config.redisPort)
-	//store config for later
-	badDevsConfig = config
 	// initialize categories
 	if !badDevsInitCategories() {
 		badDevsError("Unable to initialize Categories")
