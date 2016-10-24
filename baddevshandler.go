@@ -161,7 +161,7 @@ func badDevsRedisAddDomains(c *BADDevsCategory, w http.ResponseWriter, req *http
 	}
 	_, err := client.HMSet(badDevsConfig.goDnsHash, *domains).Result()
 	if err != nil {
-		badDevsError("Redis: Failed to HMSet map\n%v\nmap with %v keys", err, len(*domains))
+		badDevsError("Redis: Failed to HMSet map\n%v\nmap with %v keys\n", err, len(*domains))
 		//for key, value := range *domains {
 		//fmt.Printf("%v -> %v", key, value)
 		//}
@@ -189,6 +189,15 @@ func badDevsRedisRemoveDomains(c *BADDevsCategory, w http.ResponseWriter, req *h
 	return true
 }
 
+func badDevsInitRedis() bool {
+	_, err := client.Del(badDevsConfig.goDnsHash).Result()
+	if err != nil {
+		badDevsError("Redis: Failed to init GoDns hash\n")
+		return false
+	}
+	return true
+}
+
 func badDevsGetDomains(c *BADDevsCategory, w http.ResponseWriter, req *http.Request) (*map[string]string, bool) {
 	filePath := path.Join(badDevsConfig.blackListDir, c.Name, "domains")
 	file, err := os.Open(filePath)
@@ -199,7 +208,7 @@ func badDevsGetDomains(c *BADDevsCategory, w http.ResponseWriter, req *http.Requ
 	}
 	domains := make(map[string]string, c.NumDomains)
 	//loop thru each domain in the file, checking and adding it to the map
-	domainRegExp := regexp.MustCompile(`^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][a-zA-Z0-9-_]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,6}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$`)
+	domainRegExp := regexp.MustCompile(`^(([a-zA-Z]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)(\.([a-zA-Z]([a-zA-Z0-9\-]*[a-zA-Z0-9])?))*)$`)
 	reader := bufio.NewReader(file)
 	line, prefix, err := reader.ReadLine()
 	for line != nil && !prefix && err == nil {
@@ -208,7 +217,7 @@ func badDevsGetDomains(c *BADDevsCategory, w http.ResponseWriter, req *http.Requ
 		if domainRegExp.MatchString(trimmedLine) {
 			domains[trimmedLine] = badDevsConfig.badDevsIP
 		} else {
-			badDevsError("Domain name is incorrectly formatted %v\n", trimmedLine)
+			badDevsDebug("Domain name is incorrectly formatted %v\n", trimmedLine)
 		}
 		line, prefix, err = reader.ReadLine()
 	}
@@ -337,6 +346,7 @@ func badDevsHandler(r *mux.Router, config BADDevsConfig) {
 		badDevsError("Redis did not respond to ping", config.badDevsDomain)
 		panic(err)
 	}
+	badDevsInitRedis()
 	badDevsInfo("Redis connected %v:%v\n", config.redisHost, config.redisPort)
 	// initialize categories
 	if !badDevsInitCategories() {
