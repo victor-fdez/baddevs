@@ -1,0 +1,3 @@
+[submodule "client"]
+	path = client
+	url = git@github.com:victor-fdez/angular2-webpack-starter.git

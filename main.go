@@ -15,13 +15,23 @@ func some(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	var dir, port, host, badDevsHost string
+	var dir, port, host string
+	var config BADDevsConfig
 
 	flag.StringVar(&dir, "dir", ".", "the directory to serve files from. Defaults to the current dir")
-	flag.StringVar(&port, "port", "8000", "the port to bind to. Defaults to 8000")
-	flag.StringVar(&host, "host", "0.0.0.0", "the ip address to bind to. Defaults to 0.0.0.0")
-	flag.StringVar(&badDevsHost, "baddevs_host", "baddevs.io", "the domain used by server to control dns. Defaults to baddevs.io")
+	flag.StringVar(&port, "port", "8000", "the port to bind to.")
+	flag.StringVar(&host, "host", "0.0.0.0", "the ip address to bind to.")
+	flag.StringVar(&config.badDevsDomain, "baddevs-domain", "baddevs.io", "the domain used by server to control dns.")
+	flag.StringVar(&config.badDevsIP, "baddevs-ip", "192.168.1.1", "the bad request IP to send traffic to.")
+	flag.StringVar(&config.goDnsHash, "godns-hash", "godns:hosts", "the redis hash on which to store DNS records for GODNS.")
+	flag.StringVar(&config.redisHost, "redis-host", "0.0.0.0", "the ip of the Redis server.")
+	flag.StringVar(&config.redisPort, "redis-port", "6379", "the port of the Redis server.")
+	flag.StringVar(&config.blackListDir, "black-list-dir", "blacklists/", "The directory containing the black list category folders.")
+	flag.BoolVar(&config.verbose, "verbose", false, "Sets the server to be verbose.")
 	flag.Parse()
+
+	//store config for later
+	badDevsConfig = config
 
 	r := mux.NewRouter()
 
@@ -37,7 +47,7 @@ func main() {
 	}
 
 	// Setup handler
-	badDevsHandler(r, badDevsHost)
+	badDevsHandler(r, config)
 	badHandler(r)
 
 	// This will serve files under http://<host>:<port>/static/<filename>
